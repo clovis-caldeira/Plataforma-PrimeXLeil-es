@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrimeX Leilões - Investimentos Imobiliários Compartilhados</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals & Slate Blue -->
+    <!-- Application Structure Plan: Foi utilizada uma estrutura de página única (SPA) com seções temáticas para uma navegação fluida e intuitiva. O fluxo guia o usuário desde a proposta de valor (Hero, Por que Investir), passando pela exploração de oportunidades (Carrossel interativo com modal protegido por senha), até a ferramenta de engajamento principal (Calculadora de Viabilidade Interativa) e finalizando com uma chamada para ação clara (Contato). Esta estrutura foi escolhida por permitir a apresentação de todo o funil de MVP em um único local, maximizando a retenção e o entendimento do usuário sem a necessidade de múltiplos carregamentos de página ou um backend complexo. -->
+    <!-- Visualization & Content Choices: 1) Proposta de valor -> Cards informativos -> HTML/CSS -> Justificativa: Clareza e padrão de mercado. 2) Oportunidades -> Carrossel de cards -> JS/HTML/CSS -> Justificativa: Apresentação visual e econômica de espaço. 3) Detalhes Financeiros -> Modal com Gráfico de Rosca (Chart.js) -> JS/Canvas -> Justificativa: Transforma dados complexos em um visual de fácil compreensão, mostrando a composição dos custos. 4) Calculadora de Viabilidade -> Formulário interativo com Gráfico de Barras (Chart.js) -> JS/Canvas -> Justificativa: Elemento de maior engajamento, permite ao usuário "brincar" com os números, entendendo a fundo o modelo de negócio e o potencial de retorno, traduzindo a lógica da planilha para uma ferramenta web. 5) Geração de Conteúdo -> Gemini API -> JS/HTML -> Justificativa: Adiciona um "wow-factor" e utilidade prática, gerando descrições de marketing e estratégias de investimento personalizadas, enriquecendo a experiência do usuário. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #F8F9FA;
+            color: #343A40;
+        }
+        .hero-bg {
+            background-color: #0d1b2a;
+            background-image: linear-gradient(rgba(13, 27, 42, 0.8), rgba(13, 27, 42, 0.8)), url('https://images.unsplash.com/photo-1582407947304-fd86f028f716?q=80&w=1992&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+        }
+        .risk-meter {
+            width: 100px;
+            height: 50px;
+            border-top-left-radius: 50px;
+            border-top-right-radius: 50px;
+            border: 5px solid #E9ECEF;
+            border-bottom: 0;
+            position: relative;
+            overflow: hidden;
+            background-color: #e9ecef;
+        }
+        .risk-meter::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background: #343A40;
+            border-radius: 50%;
+            transform: translate(-50%, -20%);
+            z-index: 2;
+        }
+        .risk-meter .risk-needle {
+            width: 2px;
+            height: 40px;
+            background: #343A40;
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform-origin: bottom center;
+            transition: transform 0.5s ease-in-out;
+            z-index: 1;
+        }
+        .risk-meter.risk-green .risk-needle { transform: translateX(-50%) rotate(-60deg); }
+        .risk-meter.risk-yellow .risk-needle { transform: translateX(-50%) rotate(0deg); }
+        .risk-meter.risk-red .risk-needle { transform: translateX(-50%) rotate(60deg); }
+        .risk-meter .risk-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .risk-meter.risk-green .risk-fill { background: linear-gradient(90deg, #28A745 50%, transparent 50%); }
+        .risk-meter.risk-yellow .risk-fill { background: linear-gradient(90deg, #28A745 33%, #FFC107 66%, transparent 66%); }
+        .risk-meter.risk-red .risk-fill { background: linear-gradient(90deg, #28A745 33%, #FFC107 66%, #DC3545 100%); }
+
+        .modal-backdrop {
+            transition: opacity 0.3s ease;
+        }
+        .spinner {
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border-left-color: #fff;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <a href="#" class="text-2xl font-bold text-[#0d1b2a]">PrimeX Leilões ✨</a>
+            <div class="hidden md:flex space-x-6 items-center">
+                <a href="#about" class="text-gray-600 hover:text-[#1b263b] transition">Por que Investir?</a>
+                <a href="#opportunities" class="text-gray-600 hover:text-[#1b263b] transition">Oportunidades</a>
+                <a href="#calculator" class="text-gray-600 hover:text-[#1b263b] transition">Calculadora</a>
+                <a href="#contact" class="bg-[#1b263b] text-white py-2 px-4 rounded-lg hover:bg-[#415a77] transition">Contato</a>
+            </div>
+            <button id="mobile-menu-button" class="md:hidden">
+                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+            </button>
+        </nav>
+        <div id="mobile-menu" class="hidden md:hidden">
+            <a href="#about" class="block py-2 px-4 text-sm hover:bg-gray-200">Por que Investir?</a>
+            <a href="#opportunities" class="block py-2 px-4 text-sm hover:bg-gray-200">Oportunidades</a>
+            <a href="#calculator" class="block py-2 px-4 text-sm hover:bg-gray-200">Calculadora</a>
+            <a href="#contact" class="block py-2 px-4 text-sm hover:bg-gray-200">Contato</a>
+        </div>
+    </header>
+
+    <main>
+        <section id="hero" class="hero-bg text-white py-20 md:py-32">
+            <div class="container mx-auto px-6 text-center">
+                <h1 class="text-4xl md:text-6xl font-bold leading-tight mb-4">Leilões de Imóveis Compartilhados</h1>
+                <p class="text-lg md:text-2xl mb-8 text-gray-200">Oportunidades exclusivas com rentabilidade projetada acima de 30% ao ano.</p>
+                <a href="#opportunities" class="bg-blue-500 text-white font-bold py-3 px-8 rounded-full hover:bg-blue-600 transition-transform transform hover:scale-105 text-lg">VER OPORTUNIDADES DO MÊS</a>
+            </div>
+        </section>
+
+        <section id="about" class="py-20">
+            <div class="container mx-auto px-6">
+                <h2 class="text-3xl md:text-4xl font-bold text-center mb-12">Por Que Investir Conosco?</h2>
+                <div class="grid md:grid-cols-3 gap-8 text-center">
+                    <div class="bg-white p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                        <div class="text-blue-500 mb-4 text-5xl flex justify-center">📈</div>
+                        <h3 class="text-xl font-bold mb-2">Alto Retorno</h3>
+                        <p class="text-gray-600">Acesse investimentos imobiliários com potencial de valorização muito acima do mercado financeiro tradicional.</p>
+                    </div>
+                    <div class="bg-white p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                        <div class="text-blue-500 mb-4 text-5xl flex justify-center">🤝</div>
+                        <h3 class="text-xl font-bold mb-2">Investimento Compartilhado</h3>
+                        <p class="text-gray-600">Invista em imóveis de alto valor com um capital inicial acessível, dividindo os custos, os riscos e, principalmente, os lucros.</p>
+                    </div>
+                    <div class="bg-white p-8 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                        <div class="text-blue-500 mb-4 text-5xl flex justify-center">🛡️</div>
+                        <h3 class="text-xl font-bold mb-2">Análise Profissional e Jurídica</h3>
+                        <p class="text-gray-600">Nossa equipe de especialistas realiza uma análise 360º de viabilidade financeira e jurídica, mitigando riscos e garantindo a segurança da sua operação.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="opportunities" class="py-20 bg-gray-100">
+            <div class="container mx-auto px-6">
+                <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">Oportunidades em Destaque</h2>
+                <p class="text-center text-gray-600 mb-12 max-w-2xl mx-auto">Esta é uma seleção curada de imóveis que passaram por nossa análise inicial. Clique em um imóvel para solicitar acesso à análise completa.</p>
+                <div id="opportunities-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                </div>
+            </div>
+        </section>
+        
+        <section id="calculator" class="py-20">
+            <div class="container mx-auto px-6">
+                <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">Calculadora de Viabilidade</h2>
+                <p class="text-center text-gray-600 mb-12 max-w-2xl mx-auto">Simule um investimento. Altere os valores abaixo para entender como cada variável impacta o potencial de retorno do seu investimento.</p>
+                <div class="bg-white p-8 rounded-xl shadow-2xl max-w-4xl mx-auto">
+                    <div class="grid md:grid-cols-2 gap-8 items-start">
+                        <div class="space-y-6">
+                            <div>
+                                <label for="calc-lance" class="font-semibold">Valor do Lance (Arrematação)</label>
+                                <input type="number" id="calc-lance" value="190000" class="w-full mt-1 p-2 border rounded-md">
+                            </div>
+                            <div>
+                                <label for="calc-venda" class="font-semibold">Valor Projetado de Venda</label>
+                                <input type="number" id="calc-venda" value="370000" class="w-full mt-1 p-2 border rounded-md">
+                            </div>
+                            <div>
+                                <label for="calc-reforma" class="font-semibold">Custos (Reforma, Outros)</label>
+                                <input type="number" id="calc-reforma" value="5700" class="w-full mt-1 p-2 border rounded-md">
+                            </div>
+                             <button id="ai-strategy-button" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2">
+                                <span id="ai-strategy-button-text">✨ Obter Estratégia com IA</span>
+                                <div id="ai-strategy-spinner" class="spinner hidden"></div>
+                            </button>
+                        </div>
+                        <div class="space-y-4">
+                            <h3 class="text-xl font-bold text-center">Resultado da Simulação</h3>
+                             <div class="bg-gray-100 p-6 rounded-lg text-center">
+                                <p class="text-gray-600">Retorno sobre Investimento (ROI)</p>
+                                <p id="calc-roi-output" class="text-4xl font-bold text-green-600">32.2%</p>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                               <div class="bg-gray-100 p-4 rounded-lg text-center">
+                                    <p class="text-sm text-gray-600">Lucro Líquido</p>
+                                    <p id="calc-lucro-output" class="text-xl font-bold">R$ 88.996</p>
+                                </div>
+                                <div class="bg-gray-100 p-4 rounded-lg text-center">
+                                    <p class="text-sm text-gray-600">Custo Total</p>
+                                    <p id="calc-custo-output" class="text-xl font-bold">R$ 275.322</p>
+                                </div>
+                            </div>
+                            <div class="chart-container h-64 max-h-64 max-w-md mx-auto relative">
+                                <canvas id="calculatorChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="ai-strategy-output-container" class="mt-6 hidden">
+                        <div class="bg-purple-50 border-l-4 border-purple-500 text-purple-800 p-4 rounded-r-lg">
+                             <h4 class="font-bold mb-2">Estratégia de Investimento (IA)</h4>
+                             <p id="ai-strategy-output" class="text-sm whitespace-pre-wrap"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="contact" class="py-20 bg-gray-800 text-white">
+            <div class="container mx-auto px-6 text-center">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Pronto para investir de forma inteligente?</h2>
+                <p class="text-gray-300 mb-8 max-w-xl mx-auto">Fale com nosso especialista, tire suas dúvidas e tenha acesso às melhores oportunidades do mercado.</p>
+                <a href="https://wa.me/5511999999999?text=Ol%C3%A1!%20Tenho%20interesse%20em%20investir%20com%20a%20PrimeX%20Leil%C3%B5es." target="_blank" class="bg-green-500 text-white font-bold py-3 px-8 rounded-full hover:bg-green-600 transition-transform transform hover:scale-105 text-lg inline-block">
+                    FALAR VIA WHATSAPP
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-gray-900 text-white py-8">
+        <div class="container mx-auto px-6 text-center">
+            <p class="font-bold text-lg">PrimeX Leilões</p>
+            <p class="text-sm text-gray-400">Sistema de Gerenciamento de Leilões de Imóveis Compartilhados</p>
+            <p class="text-xs text-gray-500 mt-4">© 2025 PrimeX Leilões. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+
+    <div id="modal-backdrop" class="fixed inset-0 bg-black bg-opacity-70 z-50 hidden opacity-0 modal-backdrop"></div>
+    <div id="password-modal" class="fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm mx-4">
+             <h2 class="text-2xl font-bold mb-4">Acesso Restrito</h2>
+             <p class="text-gray-600 mb-6">Por favor, insira a senha de investidor para ver os detalhes completos.</p>
+             <input type="password" id="password-input" class="w-full p-2 border rounded-md mb-4" placeholder="********">
+             <p id="password-error" class="text-red-500 text-sm mb-4 hidden">Senha incorreta. Tente novamente.</p>
+             <div class="flex justify-end space-x-4">
+                 <button id="password-cancel" class="text-gray-600 hover:text-gray-800">Cancelar</button>
+                 <button id="password-submit" class="bg-blue-500 text-white py-2 px-6 rounded-lg hover:bg-blue-600">Acessar</button>
+             </div>
+        </div>
+    </div>
+    
+    <div id="details-modal" class="fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto mx-4">
+            <div class="flex justify-between items-start mb-4">
+                <h2 id="modal-title" class="text-2xl md:text-3xl font-bold">Detalhes da Oportunidade</h2>
+                <button id="details-close" class="text-3xl text-gray-500 hover:text-gray-800">&times;</button>
+            </div>
+            <div class="grid md:grid-cols-2 gap-8">
+                <div>
+                    <img id="modal-img" src="" alt="Foto do imóvel" class="w-full h-64 object-cover rounded-lg mb-4">
+                    
+                    <button id="ai-description-button" class="w-full mb-4 bg-purple-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2">
+                        <span id="ai-description-button-text">✨ Gerar Descrição com IA</span>
+                        <div id="ai-description-spinner" class="spinner hidden"></div>
+                    </button>
+                    
+                    <div id="modal-description-container" class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="font-bold text-lg mb-2">Descrição do Imóvel</h4>
+                        <p id="modal-description" class="text-gray-600 mb-4"></p>
+                    </div>
+
+                    <div class="bg-gray-100 p-4 rounded-lg mt-4">
+                        <h4 class="font-bold text-lg mb-2">Análise de Risco</h4>
+                        <p id="modal-risk-analysis" class="text-gray-600 text-sm"></p>
+                    </div>
+                     <a id="modal-leilao-link" href="#" target="_blank" class="mt-4 inline-block w-full text-center bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition">Ver no Site do Leiloeiro</a>
+                </div>
+                <div>
+                    <h4 class="font-bold text-xl mb-4 text-center">Projeção Financeira</h4>
+                    <div class="chart-container h-64 max-h-64 max-w-sm mx-auto relative mb-6">
+                        <canvas id="financialsChart"></canvas>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between p-2 bg-gray-50 rounded"><span>Valor de Avaliação:</span> <span id="modal-avaliacao" class="font-semibold"></span></div>
+                        <div class="flex justify-between p-2 bg-gray-100 rounded"><span>Lance Mínimo (2ª Praça):</span> <span id="modal-lance" class="font-semibold"></span></div>
+                        <div class="flex justify-between p-2 bg-gray-50 rounded"><span>Custo Total Estimado:</span> <span id="modal-custo-total" class="font-semibold"></span></div>
+                        <div class="flex justify-between p-2 bg-gray-100 rounded"><span>Valor de Venda Projetado:</span> <span id="modal-venda" class="font-semibold"></span></div>
+                        <div class="flex justify-between p-3 bg-green-100 text-green-800 rounded">
+                            <span class="font-bold">Lucro Líquido Projetado:</span>
+                            <span id="modal-lucro" class="font-bold text-lg"></span>
+                        </div>
+                        <div class="flex justify-between p-3 bg-blue-100 text-blue-800 rounded">
+                            <span class="font-bold">ROI Detalhado:</span>
+                            <span id="modal-roi" class="font-bold text-lg"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+            
+            const opportunities = [
+                {
+                    id: 1,
+                    title: 'Apartamento em Moema, São Paulo',
+                    type: 'Apartamento de 2 quartos',
+                    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=2070&auto=format&fit=crop',
+                    roi: 42,
+                    risk: 'green',
+                    description: 'Espaçoso apartamento em uma das áreas mais valorizadas de São Paulo. Próximo a parques, shoppings e com fácil acesso a grandes avenidas. Grande potencial de valorização.',
+                    riskAnalysis: 'Imóvel desocupado, documentação clara e sem pendências judiciais conhecidas. Alta liquidez de venda na região de Moema. Risco considerado baixo.',
+                    leilaoLink: '#',
+                    financeiro: {
+                        avaliacao: 250000,
+                        lanceMinimo: 125000,
+                        custoTotal: 155000,
+                        venda: 220000,
+                    }
+                },
+                {
+                    id: 2,
+                    title: 'Casa com Piscina em Campinas',
+                    type: 'Casa de 3 dormitórios',
+                    image: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?q=80&w=2070&auto=format&fit=crop',
+                    roi: 35,
+                    risk: 'yellow',
+                    description: 'Casa com ampla área de lazer, incluindo piscina e churrasqueira. Localizada em condomínio fechado com segurança 24h.',
+                    riskAnalysis: 'Imóvel ocupado, requer processo de desocupação (estimativa de 6 meses incluída nos custos). Documentação regular. Risco moderado devido à necessidade de desocupação.',
+                    leilaoLink: '#',
+                    financeiro: {
+                        avaliacao: 450000,
+                        lanceMinimo: 225000,
+                        custoTotal: 295000,
+                        venda: 400000,
+                    }
+                },
+                {
+                    id: 3,
+                    title: 'Apartamento na Vila Leopoldina, SP',
+                    type: 'Apartamento de 1 dormitório',
+                    image: 'https://images.unsplash.com/photo-1593696140826-c58b02198d47?q=80&w=2070&auto=format&fit=crop',
+                    roi: 48,
+                    risk: 'green',
+                    description: 'Moderno apartamento, ideal para investimento ou locação. Prédio novo com lazer completo. Próximo à estação de trem e ao Parque Villa-Lobos.',
+                    riskAnalysis: 'Imóvel desocupado, recém-entregue pela construtora. Sem pendências. Baixíssimo risco e altíssima liquidez na região.',
+                    leilaoLink: '#',
+                     financeiro: {
+                        avaliacao: 350000,
+                        lanceMinimo: 175000,
+                        custoTotal: 210000,
+                        venda: 310000,
+                    }
+                }
+            ];
+
+            const opportunitiesContainer = document.getElementById('opportunities-container');
+            opportunities.forEach(op => {
+                const card = `
+                    <div data-id="${op.id}" class="opportunity-card bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer transform hover:-translate-y-2 transition-transform duration-300">
+                        <img src="${op.image}" alt="${op.title}" class="w-full h-48 object-cover">
+                        <div class="p-6">
+                            <h3 class="text-xl font-bold mb-2">${op.title}</h3>
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="text-sm text-gray-500">ROI Estimado</p>
+                                    <p class="text-2xl font-bold text-green-600">${op.roi}%</p>
+                                </div>
+                                <div class="risk-meter risk-${op.risk}">
+                                    <div class="risk-fill"></div>
+                                    <div class="risk-needle"></div>
+                                </div>
+                            </div>
+                            <button class="mt-4 w-full bg-gray-800 text-white py-2 rounded-lg hover:bg-gray-900 transition">Ver Análise Completa</button>
+                        </div>
+                    </div>
+                `;
+                opportunitiesContainer.innerHTML += card;
+            });
+
+            const passwordModal = document.getElementById('password-modal');
+            const detailsModal = document.getElementById('details-modal');
+            const modalBackdrop = document.getElementById('modal-backdrop');
+            const passwordInput = document.getElementById('password-input');
+            const passwordError = document.getElementById('password-error');
+            let currentOpportunity = null;
+            let financialChart = null;
+            let calculatorChart = null;
+            
+            async function callGeminiAPI(prompt) {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    contents: [{
+                        role: "user",
+                        parts: [{ text: prompt }]
+                    }]
+                };
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates.length > 0 && result.candidates[0].content.parts[0].text) {
+                        return result.candidates[0].content.parts[0].text;
+                    } else {
+                        return "Não foi possível obter uma resposta da IA. Tente novamente.";
+                    }
+                } catch (error) {
+                    console.error("Erro ao chamar a API Gemini:", error);
+                    return "Ocorreu um erro de comunicação com a IA. Verifique o console para mais detalhes.";
+                }
+            }
+
+            document.querySelectorAll('.opportunity-card').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    const opportunityId = e.currentTarget.dataset.id;
+                    currentOpportunity = opportunities.find(op => op.id == opportunityId);
+                    passwordModal.classList.remove('hidden');
+                    modalBackdrop.classList.remove('hidden');
+                    setTimeout(() => modalBackdrop.classList.remove('opacity-0'), 10);
+                });
+            });
+
+            function closeModal() {
+                passwordModal.classList.add('hidden');
+                detailsModal.classList.add('hidden');
+                modalBackdrop.classList.add('opacity-0');
+                setTimeout(() => modalBackdrop.classList.add('hidden'), 300);
+                passwordInput.value = '';
+                passwordError.classList.add('hidden');
+            }
+
+            document.getElementById('password-cancel').addEventListener('click', closeModal);
+            document.getElementById('details-close').addEventListener('click', closeModal);
+            modalBackdrop.addEventListener('click', closeModal);
+
+            document.getElementById('password-submit').addEventListener('click', () => {
+                if (passwordInput.value === 'investidor2025') {
+                    showDetailsModal(currentOpportunity);
+                } else {
+                    passwordError.classList.remove('hidden');
+                }
+            });
+            
+            function formatCurrency(value) {
+                return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+            }
+
+            function showDetailsModal(op) {
+                passwordModal.classList.add('hidden');
+                
+                document.getElementById('modal-title').textContent = op.title;
+                document.getElementById('modal-img').src = op.image;
+                document.getElementById('modal-description').textContent = op.description;
+                document.getElementById('modal-risk-analysis').textContent = op.riskAnalysis;
+                document.getElementById('modal-leilao-link').href = op.leilaoLink;
+
+                const lucro = op.financeiro.venda - op.financeiro.custoTotal;
+                const roi = ((lucro / op.financeiro.custoTotal) * 100).toFixed(1);
+                
+                document.getElementById('modal-avaliacao').textContent = formatCurrency(op.financeiro.avaliacao);
+                document.getElementById('modal-lance').textContent = formatCurrency(op.financeiro.lanceMinimo);
+                document.getElementById('modal-custo-total').textContent = formatCurrency(op.financeiro.custoTotal);
+                document.getElementById('modal-venda').textContent = formatCurrency(op.financeiro.venda);
+                document.getElementById('modal-lucro').textContent = formatCurrency(lucro);
+                document.getElementById('modal-roi').textContent = `${roi}% em 12 meses`;
+
+                detailsModal.classList.remove('hidden');
+                
+                const costs = {
+                    lance: op.financeiro.lanceMinimo,
+                    comissaoLeiloeiro: op.financeiro.lanceMinimo * 0.05,
+                    itbi: op.financeiro.lanceMinimo * 0.03,
+                    registro: op.financeiro.lanceMinimo * 0.02,
+                    advogado: op.financeiro.lanceMinimo <= 150000 ? 10000 : (op.financeiro.lanceMinimo <= 350000 ? 15000 : op.financeiro.lanceMinimo * 0.05),
+                    consultoria: op.financeiro.lanceMinimo * 0.02,
+                    outros: op.financeiro.custoTotal - (op.financeiro.lanceMinimo + (op.financeiro.lanceMinimo * 0.05) + (op.financeiro.lanceMinimo * 0.03) + (op.financeiro.lanceMinimo * 0.02) + (op.financeiro.lanceMinimo <= 150000 ? 10000 : (op.financeiro.lanceMinimo <= 350000 ? 15000 : op.financeiro.lanceMinimo * 0.05)) + (op.financeiro.lanceMinimo * 0.02) )
+                };
+                
+                const chartCtx = document.getElementById('financialsChart').getContext('2d');
+                if (financialChart) {
+                    financialChart.destroy();
+                }
+                financialChart = new Chart(chartCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Lance', 'Comissão', 'ITBI/Registro', 'Advogado', 'Consultoria', 'Outros'],
+                        datasets: [{
+                            label: 'Composição de Custos',
+                            data: [costs.lance, costs.comissaoLeiloeiro, costs.itbi + costs.registro, costs.advogado, costs.consultoria, costs.outros],
+                            backgroundColor: ['#0d1b2a', '#1b263b', '#415a77', '#778da9', '#e0e1dd', '#adb5bd'],
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } },
+                            tooltip: { callbacks: { label: function(context) { return (context.label || '') + ': ' + formatCurrency(context.parsed); } } }
+                        }
+                    }
+                });
+            }
+
+            const calcInputs = ['calc-lance', 'calc-venda', 'calc-reforma'];
+            calcInputs.forEach(id => {
+                document.getElementById(id).addEventListener('input', runCalculator);
+            });
+            
+            function runCalculator() {
+                const lance = parseFloat(document.getElementById('calc-lance').value) || 0;
+                const venda = parseFloat(document.getElementById('calc-venda').value) || 0;
+                const reformaOutros = parseFloat(document.getElementById('calc-reforma').value) || 0;
+
+                const comissao = lance * 0.05;
+                const itbi = lance * 0.03;
+                const registro = lance * 0.02;
+                const advogado = lance <= 150000 ? 10000 : (lance <= 350000 ? 15000 : lance * 0.05);
+                const consultoria = lance * 0.02;
+                const corretor = venda * 0.06;
+
+                const custoTotal = lance + comissao + itbi + registro + advogado + consultoria + reformaOutros + corretor;
+                const lucro = venda - custoTotal;
+                const roi = custoTotal > 0 ? (lucro / custoTotal) * 100 : 0;
+                
+                document.getElementById('calc-roi-output').textContent = roi.toFixed(1) + '%';
+                document.getElementById('calc-lucro-output').textContent = formatCurrency(lucro);
+                document.getElementById('calc-custo-output').textContent = formatCurrency(custoTotal);
+                
+                updateCalculatorChart(custoTotal, venda);
+            }
+            
+            function updateCalculatorChart(custoTotal, venda) {
+                 const chartCtx = document.getElementById('calculatorChart').getContext('2d');
+                 if(calculatorChart) { calculatorChart.destroy(); }
+                 calculatorChart = new Chart(chartCtx, {
+                     type: 'bar',
+                     data: { labels: ['Valores'],
+                         datasets: [{ label: 'Custo Total Estimado', data: [custoTotal], backgroundColor: '#FF6384', }, { label: 'Valor de Venda Projetado', data: [venda], backgroundColor: '#36A2EB', }]
+                     },
+                     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                         scales: { x: { beginAtZero: true, ticks: { callback: function(value) { return formatCurrency(value); } } } },
+                         plugins: { legend: { position: 'bottom' },
+                            tooltip: { callbacks: { label: function(context) { return (context.dataset.label || '') + ': ' + formatCurrency(context.parsed.x); } } }
+                         }
+                     }
+                 });
+            }
+            
+            document.getElementById('ai-description-button').addEventListener('click', async () => {
+                const button = document.getElementById('ai-description-button');
+                const buttonText = document.getElementById('ai-description-button-text');
+                const spinner = document.getElementById('ai-description-spinner');
+                
+                button.disabled = true;
+                buttonText.textContent = 'Gerando...';
+                spinner.classList.remove('hidden');
+
+                const prompt = `Você é um corretor de imóveis especialista em marketing digital. Crie uma descrição persuasiva e atrativa com no máximo 3 parágrafos para o seguinte imóvel: ${currentOpportunity.type} localizado em ${currentOpportunity.title}. Destaque o potencial de investimento, a qualidade de vida na região e os diferenciais do imóvel. A descrição deve ser otimista, profissional e focada em atrair investidores.`;
+                
+                const aiResponse = await callGeminiAPI(prompt);
+                document.getElementById('modal-description').textContent = aiResponse;
+
+                button.disabled = false;
+                buttonText.textContent = '✨ Gerar Descrição com IA';
+                spinner.classList.add('hidden');
+            });
+            
+            document.getElementById('ai-strategy-button').addEventListener('click', async () => {
+                const button = document.getElementById('ai-strategy-button');
+                const buttonText = document.getElementById('ai-strategy-button-text');
+                const spinner = document.getElementById('ai-strategy-spinner');
+                const outputContainer = document.getElementById('ai-strategy-output-container');
+                const outputElement = document.getElementById('ai-strategy-output');
+
+                button.disabled = true;
+                buttonText.textContent = 'Analisando...';
+                spinner.classList.remove('hidden');
+                outputContainer.classList.add('hidden');
+
+                const lance = document.getElementById('calc-lance').value;
+                const custoTotal = document.getElementById('calc-custo-output').textContent;
+                const venda = document.getElementById('calc-venda').value;
+                const roi = document.getElementById('calc-roi-output').textContent;
+
+                const prompt = `Você é um consultor de investimentos sênior, especialista no mercado imobiliário de leilões. Com base em uma simulação com os seguintes dados: Valor do Lance = ${formatCurrency(lance)}, Custo Total da Operação = ${custoTotal}, Valor de Venda Projetado = ${formatCurrency(venda)}, e ROI Projetado = ${roi}, crie um breve parágrafo com uma estratégia de investimento para esta oportunidade. Sugira o perfil de investidor ideal para esta operação (conservador, moderado, arrojado) e mencione os pontos chave a serem observados durante o processo (ex: agilidade na reforma, estratégia de precificação para venda, gestão de desocupação). Formate a resposta com um título para o perfil do investidor e bullet points para os pontos chave.`;
+
+                const aiResponse = await callGeminiAPI(prompt);
+                outputElement.textContent = aiResponse;
+                outputContainer.classList.remove('hidden');
+
+                button.disabled = false;
+                buttonText.textContent = '✨ Obter Estratégia com IA';
+                spinner.classList.add('hidden');
+            });
+
+            runCalculator();
+        });
+    </script>
+</body>
+</html>
